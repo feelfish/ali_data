@@ -122,3 +122,6 @@ select t1.user_id,t1.user_geohash,t1.behavior_type,t1.cut2,3 flag
   where t1.max_cut1>1  and t1.cut2>1
     and t1.max_cut1=t1.cut1
     and t1.rownumber=1)h;
+    
+    
+    总计8192个用户，占总用户数的81.92%.
