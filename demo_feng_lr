@@ -1,0 +1,68 @@
+经过对地理位置进行初始化，进行行为数据的处理
+
+提取11月18号到12月16号的行为信息，字段包括user_id,item_id,item_category,geo_hash,click,cart,collect，及12月17号
+
+的购买记录信息，并进行采样数据平衡
+
+--创建11月18日到12月16日行为数据表:click 点击数,collect 收藏数,cart 加入购物车数
+
+create table demo_feng_lr_temp as
+select t1.user_id,t1.item_id,t1.item_category,
+       sum(t1.clicknum) click,sum(t1.collectnum) collect,
+       sum(t1.cartnum) cart
+from(
+select user_id,item_id,item_category,
+case when behavior_type=1 then count(*)                                                             
+else 0 end clicknum,
+case when behavior_type=2 then count(*)                                                            
+else 0 end collectnum,
+case when behavior_type=3 then count(*)                                                            
+else 0 end  cartnum
+ from recommend_train_user
+ where split_part(time,' ',1) not in('2014-12-17','2014-12-18')
+group by user_id,item_id,item_category,behavior_type)t1
+group by t1.user_id,t1.item_id,t1.item_category;
+
+
+
+--创建11月18日到12月16日行为数以及12月17日购买的汇总数据:click 点击数；collect 收藏数；
+   cart 加入购物车数；purchase 12月17日是否购买过商品 0-否 1 -是；
+   user_geohash 经处理过的用户地理信息,'-'表示无地理信息
+
+create table demo_feng_lr as
+select a.user_id,a.item_id,a.item_category,
+       case when c.user_geohash is null then '-'
+            else c.user_geohash end user_geohash,
+       a.click,a.collect,a.cart,
+       case when b.purchase is null then 0
+                else b.purchase end purchase
+  from demo_feng_lr_temp a
+  left outer join (select distinct t1.user_id,t1.item_id,t1.item_category,1 purchase
+               from recommend_train_user t1
+               where split_part(t1.time,' ',1)='2014-12-17'
+                and t1.behavior_type=4)b 
+  on a.user_id=b.user_id and a.item_id=b.item_id and a.item_category=b.item_category 
+  left outer join demo_feng_user_geohash c on a.user_id=c.user_id;
+     
+
+
+--对数据进行抽样
+
+  create table demo_feng_sample_lr as
+  select *
+  from(
+      select c.*
+      from
+        (
+        select a.*
+        from demo_feng_lr  a
+        where a.purchase=0
+        ) c
+    where sample(4279,1,c.user_id)= true
+
+ union all
+
+select a.*
+        from demo_feng_lr  a
+        where a.purchase=1)h;
+        
